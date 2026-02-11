@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --muted: #64748b;
+  --muted-foreground: #475569;
+  --border: #e2e8f0;
+  --card: #ffffff;
+  --card-hover: #f1f5f9;
+  --accent-red: #dc2626;
+  --accent-amber: #f59e0b;
+  --accent-blue: #3b82f6;
+  --accent-green: #10b981;
+  --accent-gray: #6b7280;
+  --accent-red-bg: #fef2f2;
+  --accent-amber-bg: #fffbeb;
+  --accent-blue-bg: #eff6ff;
+  --accent-green-bg: #f0fdf4;
+  --accent-gray-bg: #f9fafb;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-accent-red: var(--accent-red);
+  --color-accent-amber: var(--accent-amber);
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-green: var(--accent-green);
+  --color-accent-gray: var(--accent-gray);
+  --color-accent-red-bg: var(--accent-red-bg);
+  --color-accent-amber-bg: var(--accent-amber-bg);
+  --color-accent-blue-bg: var(--accent-blue-bg);
+  --color-accent-green-bg: var(--accent-green-bg);
+  --color-accent-gray-bg: var(--accent-gray-bg);
+  --font-sans: var(--font-inter);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Focus states for accessibility */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions */
+button,
+a {
+  transition: all 0.15s ease;
+}
