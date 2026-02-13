@@ -18,6 +18,7 @@ export interface DigestItem {
   originalSnippet: string;
   receivedAt: string;
   actionSuggestion?: string;
+  draftResponse?: string;
   tags?: string[];
   webLink?: string;
 }

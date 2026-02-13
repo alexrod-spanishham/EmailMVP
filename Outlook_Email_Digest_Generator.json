@@ -1,0 +1,224 @@
+{
+  "name": "Outlook Email Digest Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "f43e3ac2-3a28-477b-bf67-a4569c5f4baa",
+      "name": "Daily 7am Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        112,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": true,
+        "filtersUI": {
+          "values": {
+            "filters": {
+              "receivedAfter": "={{ $now.minus({ hours: 24, minutes: 2 }).setZone('America/New_York').toISO() }}\n"
+            }
+          }
+        },
+        "options": {}
+      },
+      "id": "83d2e348-61dd-47cc-ab8b-ee2eaf7f2224",
+      "name": "Get Outlook Emails (Last 24h)",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        336,
+        -64
+      ],
+      "webhookId": "efcf154d-add7-41df-a53a-0529f7dc3a23",
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "7PRLz14KPlCHdC0U",
+          "name": "Microsoft Outlook account - Alex Personal"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Batch all emails into a single array for the Claude prompt\nconst emails = $input.all().map((item, index) => {\n  const data = item.json;\n  return {\n    id: data.id || `email_${index}`,\n    from: data.from?.emailAddress?.name \n      ? `${data.from.emailAddress.name} <${data.from.emailAddress.address}>`\n      : data.from?.emailAddress?.address || 'Unknown',\n    subject: data.subject || '(no subject)',\n    body_preview: (data.bodyPreview || '').substring(0, 500),\n    received_at: data.receivedDateTime || new Date().toISOString(),\n    is_read: data.isRead || false,\n    importance: data.importance || 'normal',\n    has_attachments: data.hasAttachments || false,\n    web_link: data.webLink || ''\n  };\n});\n\nconst today = new Date().toISOString().split('T')[0];\n\nreturn [{\n  json: {\n    email_count: emails.length,\n    date: today,\n    emails: emails,\n    prompt: `You are an executive assistant preparing a daily email digest. Analyze these ${emails.length} emails and produce a structured JSON response.\n\nEMAILS:\n${emails.map((e, i) => `--- Email ${i + 1} ---\nFrom: ${e.from}\nSubject: ${e.subject}\nReceived: ${e.received_at}\nImportance: ${e.importance}\nPreview: ${e.body_preview}\n`).join('\\n')}\n\nRespond with ONLY valid JSON in this exact structure (no markdown, no backticks, no explanation):\n{\n  \"summary\": \"A 2-3 sentence executive summary of the inbox - what's urgent, what's important, key themes.\",\n  \"estimated_read_minutes\": <number>,\n  \"categories\": [\n    {\n      \"name\": \"Action Required\",\n      \"icon\": \"alert-circle\",\n      \"emails\": [\n        {\n          \"from\": \"Full Name <email>\",\n          \"subject\": \"Original subject\",\n          \"received_at\": \"ISO timestamp\",\n          \"summary\": \"One clear sentence: what this email is about and what's needed from the user.\",\n          \"priority\": \"high|medium|low\",\n          \"action_needed\": \"Specific action in one sentence\",\n          \"draft_response\": \"A brief professional reply draft (Action Required and Delegate only, omit for others)\",\n          \"tags\": [\"tag1\", \"tag2\"]\n        }\n      ]\n    },\n    {\n      \"name\": \"Delegate\",\n      \"icon\": \"users\",\n      \"emails\": []\n    },\n    {\n      \"name\": \"FYI / Updates\",\n      \"icon\": \"info\",\n      \"emails\": []\n    },\n    {\n      \"name\": \"Newsletters & Marketing\",\n      \"icon\": \"newspaper\",\n      \"emails\": []\n    },\n    {\n      \"name\": \"Low Priority\",\n      \"icon\": \"arrow-down\",\n      \"emails\": []\n    }\n  ]\n}\n\nRules:\n- Every email must appear in exactly one category\n- \"Action Required\" = needs the user to personally do something\n- \"Delegate\" = important but can be forwarded to someone else\n- \"FYI / Updates\" = informational, internal updates, status reports\n- \"Newsletters & Marketing\" = subscriptions, marketing, promotional\n- \"Low Priority\" = spam-adjacent, unimportant, can be ignored\n- Summaries should be concise but specific - include names, dates, numbers, deadlines\n- Priority: high = time-sensitive or high-stakes, medium = important but not urgent, low = nice to know\n- estimated_read_minutes should reflect how long it would take to scan the digest (usually 3-7 min)\n- draft_response: Include ONLY for Action Required and Delegate emails. Write a concise, professional suggested reply the user could copy-paste and send (~50-100 words). Match a natural, warm-but-professional tone. Omit this field entirely for FYI, Newsletters, and Low Priority emails.`\n  }\n}];"
+      },
+      "id": "5b5cb7b1-767c-4cd9-b816-e3b8a443e2d3",
+      "name": "Format Emails for Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 8192,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.prompt) }}\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "dcde4330-00b5-434f-83ae-7a31389c2209",
+      "name": "Claude: Summarize & Categorize",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        784,
+        -64
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "QawP2IvxM4VFd5Xg",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Claude's response and build the ingest payload\nconst claudeResponse = $input.first().json;\nconst prevData = $('Format Emails for Claude').first().json;\n\n// Extract text from Claude's response\nconst responseText = claudeResponse.content?.[0]?.text || '';\n\n// Parse the JSON from Claude's response\nlet digest;\ntry {\n  // Try direct parse first\n  digest = JSON.parse(responseText);\n} catch (e) {\n  // Try to extract JSON from the response if wrapped in text\n  const jsonMatch = responseText.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    digest = JSON.parse(jsonMatch[0]);\n  } else {\n    throw new Error('Could not parse Claude response as JSON: ' + responseText.substring(0, 200));\n  }\n}\n\n// Add email IDs and web links back to the categorized emails\nconst originalEmails = prevData.emails;\ndigest.categories = digest.categories.map(category => {\n  category.emails = category.emails.map(email => {\n    // Try to match by subject\n    const original = originalEmails.find(o => \n      o.subject.toLowerCase() === email.subject.toLowerCase()\n    ) || originalEmails.find(o =>\n      o.from.toLowerCase().includes(email.from.split('<')[0].trim().toLowerCase())\n    );\n    \n    return {\n      ...email,\n      id: original?.id || `msg_${Math.random().toString(36).substr(2, 9)}`,\n      gmail_link: original?.web_link || ''\n    };\n  });\n  return category;\n});\n\n// Build the final ingest payload\nconst payload = {\n  date: prevData.date,\n  summary: digest.summary,\n  categories: digest.categories,\n  email_count: prevData.email_count,\n  estimated_read_minutes: digest.estimated_read_minutes || 5,\n  raw_emails: originalEmails.map(e => ({\n    outlook_id: e.id,\n    from_address: e.from,\n    subject: e.subject,\n    body_preview: e.body_preview,\n    received_at: e.received_at\n  }))\n};\n\nreturn [{ json: payload }];"
+      },
+      "id": "35f49e36-b6df-4d49-8550-d871d968dd3b",
+      "name": "Parse Claude Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://email-digest-mvp.vercel.app/api/digest/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "email-MVP-digest-secret-2026"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "9ce7a8b4-a9ae-4e84-9d18-d009339bcefd",
+      "name": "POST Digest to App",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1232,
+        -64
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily 7am Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Outlook Emails (Last 24h)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Outlook Emails (Last 24h)": {
+      "main": [
+        [
+          {
+            "node": "Format Emails for Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Emails for Claude": {
+      "main": [
+        [
+          {
+            "node": "Claude: Summarize & Categorize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Summarize & Categorize": {
+      "main": [
+        [
+          {
+            "node": "Parse Claude Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Claude Response": {
+      "main": [
+        [
+          {
+            "node": "POST Digest to App",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "timezone": "America/New_York",
+    "callerPolicy": "workflowsFromSameOwner",
+    "binaryMode": "separate"
+  },
+  "versionId": "291fd82e-010a-4496-a42a-9b574345d184",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "81eff8195b48278e28ddd0d6ed04cb81919cb5d8760e8ce74f9d91cc8f73f4d9"
+  },
+  "id": "ELthFey5VgVxPKZwM-Mzc",
+  "tags": []
+}

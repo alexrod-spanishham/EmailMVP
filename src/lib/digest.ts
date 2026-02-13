@@ -69,6 +69,7 @@ function flattenCategories(categories: unknown): DigestItem[] {
         originalSnippet: String(e.summary || ""),
         receivedAt: String(e.received_at || new Date().toISOString()),
         actionSuggestion: e.action_needed ? String(e.action_needed) : undefined,
+        draftResponse: e.draft_response ? String(e.draft_response) : undefined,
         tags: Array.isArray(e.tags) ? e.tags.map(String) : undefined,
         webLink: e.gmail_link ? String(e.gmail_link) : undefined,
       });

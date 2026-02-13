@@ -21,6 +21,8 @@ const MOCK_ITEMS: DigestItem[] = [
       "Hi, please find attached the revised vendor agreement (v3). We've incorporated your feedback on Sections 4 and 7. The liability cap has been adjusted to...",
     receivedAt: hoursAgo(2),
     actionSuggestion: "Review Sections 4 and 7, reply with approval by Friday COB",
+    draftResponse:
+      "Hi Lisa,\n\nThanks for sending the revised agreement. I've reviewed Sections 4 and 7 — the updated liability caps look acceptable, but I have a question about the IP assignment clause. Can we schedule a quick 15-minute call Thursday to discuss before I sign off?\n\nBest regards",
     tags: ["legal", "contracts"],
   },
   {
@@ -36,6 +38,8 @@ const MOCK_ITEMS: DigestItem[] = [
       "Hey! Board deck is coming together. I've attached the latest draft — could you take a look at the product section? Specifically slides 12-18 where we cover the...",
     receivedAt: hoursAgo(5),
     actionSuggestion: "Review slides 12-18 and send comments by Monday EOD",
+    draftResponse:
+      "Hey Marcus,\n\nJust went through slides 12-18. The product roadmap section looks solid. A couple notes:\n- Slide 14: Can we add Q4 actuals for comparison?\n- Slide 16: The AI features timeline might be worth softening to \"H2 target\" rather than a specific date.\n\nHappy to discuss if helpful!",
     tags: ["board", "Q1"],
   },
   {
@@ -67,6 +71,8 @@ const MOCK_ITEMS: DigestItem[] = [
       "Hi team, I've pulled together everyone's OKR drafts into one doc (link below). Please review your section and confirm the target numbers are accurate before...",
     receivedAt: hoursAgo(6),
     actionSuggestion: "Confirm your OKR targets in the shared doc before Thursday",
+    draftResponse:
+      "Hi Priya,\n\nThanks for pulling this together. I've reviewed my section and confirmed the target numbers. One small update: I'd like to adjust our activation rate KR from 35% to 40% based on last quarter's momentum. Updated in the doc.\n\nSee you Thursday!",
     tags: ["planning", "Q1"],
   },
 
@@ -84,6 +90,8 @@ const MOCK_ITEMS: DigestItem[] = [
       "Hello, I'm David Rodriguez, VP Product at Acme Corp. We've been following your product and believe there's a strong opportunity for an integration...",
     receivedAt: hoursAgo(10),
     actionSuggestion: "Forward to Sarah on the partnerships team for initial call",
+    draftResponse:
+      "Hi David,\n\nThanks for reaching out — an integration partnership sounds like a great fit. I'm looping in Sarah from our partnerships team who can set up an initial call to explore this further.\n\nLooking forward to it.",
     tags: ["partnerships", "inbound"],
   },
   {
