@@ -19,6 +19,7 @@ export interface DigestItem {
   receivedAt: string;
   actionSuggestion?: string;
   tags?: string[];
+  webLink?: string;
 }
 
 export interface DailyDigest {

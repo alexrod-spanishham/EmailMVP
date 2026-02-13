@@ -12,11 +12,16 @@ interface DigestRow {
 }
 
 // Map n8n category names to DigestCategory keys
+// Handles exact names from the prompt AND common variations
 const CATEGORY_NAME_MAP: Record<string, DigestCategory> = {
   "action required": "action_required",
   "delegate": "delegate",
   "fyi": "fyi",
+  "fyi / updates": "fyi",
+  "fyi/updates": "fyi",
   "newsletters": "newsletters",
+  "newsletters & marketing": "newsletters",
+  "newsletters and marketing": "newsletters",
   "low priority": "low_priority",
 };
 
@@ -65,6 +70,7 @@ function flattenCategories(categories: unknown): DigestItem[] {
         receivedAt: String(e.received_at || new Date().toISOString()),
         actionSuggestion: e.action_needed ? String(e.action_needed) : undefined,
         tags: Array.isArray(e.tags) ? e.tags.map(String) : undefined,
+        webLink: e.gmail_link ? String(e.gmail_link) : undefined,
       });
     }
   }
