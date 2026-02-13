@@ -47,14 +47,20 @@ export async function GET() {
           categoriesType: typeof categories,
           categoriesIsArray: Array.isArray(categories),
           categoriesLength: Array.isArray(categories) ? categories.length : null,
-          // Show first 2 items so we can see the data shape
+          // Show category structure and first email within first category
           categoriesSample: Array.isArray(categories)
-            ? categories.slice(0, 2).map((item: Record<string, unknown>) => ({
-                keys: Object.keys(item),
-                category: item.category,
-                subject: item.subject,
-                id: item.id,
-              }))
+            ? categories.slice(0, 2).map((cat: Record<string, unknown>) => {
+                const emails = Array.isArray(cat.emails) ? cat.emails : [];
+                const firstEmail = emails[0] as Record<string, unknown> | undefined;
+                return {
+                  categoryKeys: Object.keys(cat),
+                  name: cat.name,
+                  icon: cat.icon,
+                  emailCount: emails.length,
+                  firstEmailKeys: firstEmail ? Object.keys(firstEmail) : [],
+                  firstEmail: firstEmail || null,
+                };
+              })
             : categories,
         };
       }
