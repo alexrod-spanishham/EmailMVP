@@ -24,21 +24,40 @@ export async function GET() {
 
   if (supabase) {
     try {
-      const { data, error, count } = await supabase
+      // Query the full row including categories
+      const { data, error } = await supabase
         .from("digests")
-        .select("date, email_count, estimated_read_minutes, created_at", {
-          count: "exact",
-        })
-        .order("date", { ascending: false })
-        .limit(3);
+        .select("*")
+        .eq("date", serverDate)
+        .single();
 
-      diagnostics.supabaseQuery = {
-        success: !error,
-        error: error ? error.message : null,
-        errorCode: error ? error.code : null,
-        totalRows: count,
-        recentDigests: data,
-      };
+      if (error || !data) {
+        diagnostics.supabaseQuery = {
+          success: false,
+          error: error ? error.message : "No data returned",
+          errorCode: error ? error.code : null,
+        };
+      } else {
+        const categories = data.categories;
+        diagnostics.supabaseQuery = {
+          success: true,
+          date: data.date,
+          summary: data.summary?.substring(0, 80) + "...",
+          email_count: data.email_count,
+          categoriesType: typeof categories,
+          categoriesIsArray: Array.isArray(categories),
+          categoriesLength: Array.isArray(categories) ? categories.length : null,
+          // Show first 2 items so we can see the data shape
+          categoriesSample: Array.isArray(categories)
+            ? categories.slice(0, 2).map((item: Record<string, unknown>) => ({
+                keys: Object.keys(item),
+                category: item.category,
+                subject: item.subject,
+                id: item.id,
+              }))
+            : categories,
+        };
+      }
     } catch (err) {
       diagnostics.supabaseQuery = {
         success: false,
