@@ -1,0 +1,336 @@
+{
+  "name": "Outlook Email Digest Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily 6AM Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 520]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "returnAll": false,
+        "limit": 50,
+        "filters": {
+          "receivedAfter": "={{ $now.minus(1, 'day').toISO() }}"
+        },
+        "output": "simple"
+      },
+      "id": "fetch-emails",
+      "name": "Fetch Outlook Emails",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [280, 300],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": {
+          "id": "",
+          "name": "Microsoft Outlook OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "filter-subject",
+              "leftValue": "={{ $json.subject }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "filter-junk",
+      "name": "Filter Empty Subjects",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5-20250929"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an email categorization assistant. Analyze this email and return ONLY a valid JSON object with no markdown formatting, no code blocks, no extra text.\n\nEmail Details:\n- Subject: {{ $json.subject }}\n- From: {{ $json.from.emailAddress.name }} <{{ $json.from.emailAddress.address }}>\n- Received: {{ $json.receivedDateTime }}\n- Body Preview: {{ $json.bodyPreview }}\n\nCategories (pick exactly one):\n- \"action_required\" — Needs your direct response or decision (contracts, approvals, urgent requests, incidents)\n- \"delegate\" — Tasks suitable for team assignment (partnership inquiries, customer requests, onboarding)\n- \"fyi\" — Informational updates, no action needed (metrics, meeting notes, announcements, status updates)\n- \"newsletters\" — Subscriptions, curated content, media digests\n- \"low_priority\" — Automated notifications, social media, system alerts, marketing\n\nPriority (pick exactly one):\n- \"high\" — Time-sensitive or business-critical\n- \"medium\" — Important but not urgent\n- \"low\" — Can wait\n\nReturn ONLY this JSON (no markdown, no code fences):\n{\"category\":\"one_of_the_five\",\"priority\":\"high_medium_or_low\",\"summary\":\"Concise 1-2 sentence summary\",\"actionSuggestion\":\"Next step if action_required or delegate, otherwise null\",\"tags\":[\"keyword1\",\"keyword2\"]}",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3,
+          "maxTokensToSample": 500
+        }
+      },
+      "id": "ai-categorize",
+      "name": "AI Categorize Email",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [940, 300],
+      "credentials": {
+        "anthropicApi": {
+          "id": "",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge original email data with AI categorization\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  // Get the original email from the Split In Batches node context\n  const email = item.json;\n  \n  // Parse AI response - handle both string and object formats\n  let aiResult;\n  try {\n    const aiText = email.message?.content || email.text || JSON.stringify(email);\n    // Try to extract JSON from the response\n    const jsonMatch = aiText.match(/\\{[\\s\\S]*\\}/);\n    aiResult = jsonMatch ? JSON.parse(jsonMatch[0]) : JSON.parse(aiText);\n  } catch (e) {\n    // Fallback if AI response can't be parsed\n    aiResult = {\n      category: 'low_priority',\n      priority: 'low',\n      summary: 'Unable to categorize this email automatically.',\n      actionSuggestion: null,\n      tags: []\n    };\n  }\n\n  // Validate category\n  const validCategories = ['action_required', 'delegate', 'fyi', 'newsletters', 'low_priority'];\n  const validPriorities = ['high', 'medium', 'low'];\n  \n  const category = validCategories.includes(aiResult.category) ? aiResult.category : 'low_priority';\n  const priority = validPriorities.includes(aiResult.priority) ? aiResult.priority : 'low';\n\n  results.push({\n    json: {\n      id: `email-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,\n      subject: email.subject || 'No Subject',\n      senderName: email.from?.emailAddress?.name || email.from?.emailAddress?.address || 'Unknown',\n      senderEmail: email.from?.emailAddress?.address || 'unknown@unknown.com',\n      summary: aiResult.summary || 'No summary available.',\n      category: category,\n      priority: priority,\n      originalSnippet: (email.bodyPreview || '').substring(0, 200),\n      receivedAt: email.receivedDateTime || new Date().toISOString(),\n      actionSuggestion: aiResult.actionSuggestion || undefined,\n      tags: Array.isArray(aiResult.tags) ? aiResult.tags : []\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "merge-results",
+      "name": "Merge Email + AI Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1160, 300]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "aggregate-all",
+      "name": "Aggregate All Items",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1380, 300]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5-20250929"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an executive assistant creating a brief morning email digest summary.\n\nHere are today's {{ $json.data.length }} emails, categorized:\n\n{{ $json.data.map(e => `[${e.category.toUpperCase()}] ${e.subject} — ${e.summary}`).join('\\n') }}\n\nWrite a 3-4 sentence executive summary that:\n1. Highlights any time-sensitive items requiring immediate attention\n2. Notes important FYI items or opportunities\n3. Gives a sense of the overall volume and mix\n4. Uses a calm, newspaper-style tone\n\nReturn ONLY the summary text, no JSON, no formatting, no headers.",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.5,
+          "maxTokensToSample": 400
+        }
+      },
+      "id": "ai-executive-summary",
+      "name": "Generate Executive Summary",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [1600, 300],
+      "credentials": {
+        "anthropicApi": {
+          "id": "",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Format the final payload for the ingest API\nconst aggregatedItems = $('Aggregate All Items').first().json.data;\nconst executiveSummaryRaw = $input.first().json;\n\n// Extract summary text from AI response\nconst summary = executiveSummaryRaw.message?.content \n  || executiveSummaryRaw.text \n  || 'Your daily email digest is ready.';\n\n// Calculate reading time (30 seconds per email, minimum 1 minute)\nconst estimated_read_minutes = Math.max(Math.ceil(aggregatedItems.length * 0.5), 1);\n\n// Today's date\nconst now = new Date();\nconst date = now.toISOString().split('T')[0];\n\nreturn [{\n  json: {\n    date: date,\n    summary: summary,\n    categories: aggregatedItems,\n    email_count: aggregatedItems.length,\n    estimated_read_minutes: estimated_read_minutes\n  }\n}];"
+      },
+      "id": "format-payload",
+      "name": "Format Final Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1820, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://email-digest-mvp.vercel.app/api/digest/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.INGEST_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "http-post-digest",
+      "name": "POST to Digest API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2040, 300]
+    }
+  ],
+  "connections": {
+    "Daily 6AM Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Outlook Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Outlook Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Outlook Emails": {
+      "main": [
+        [
+          {
+            "node": "Filter Empty Subjects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Empty Subjects": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "AI Categorize Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Categorize Email": {
+      "main": [
+        [
+          {
+            "node": "Merge Email + AI Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Email + AI Result": {
+      "main": [
+        [
+          {
+            "node": "Aggregate All Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate All Items": {
+      "main": [
+        [
+          {
+            "node": "Generate Executive Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Executive Summary": {
+      "main": [
+        [
+          {
+            "node": "Format Final Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Final Payload": {
+      "main": [
+        [
+          {
+            "node": "POST to Digest API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "email-digest"
+    }
+  ]
+}
