@@ -2,6 +2,8 @@ import { getDigestByDate, getLatestDigest } from "@/lib/digest";
 import { getMockDigest } from "@/lib/mock-data";
 import { DigestPageContent } from "@/components/DigestPageContent";
 
+export const dynamic = "force-dynamic";
+
 export default async function TodayPage() {
   const today = new Date().toISOString().split("T")[0];
 
